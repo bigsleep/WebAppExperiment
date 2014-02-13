@@ -1,26 +1,34 @@
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE TypeOperators, MultiParamTypeClasses, OverlappingInstances, FlexibleInstances #-}
 module Whone.Internal
-( App
-, Interface
-, I(..)
-, createInput
-, createOutput
+( (:+:)
+, (:<:)
+, inject
+, App
 ) where
 
 import Control.Monad.Trans.Free (FreeT(..), FreeF(..))
 
-class (Functor f) => Interface f
+data (f :+: g) e = Inl (f e) | Inr (g e)
+infixr 6 :+:
 
-data I a = forall f. (Interface f) => I (f a)
+class (Functor sub, Functor sup) => (:<:) sub sup where
+    inj :: sub a -> sup a
 
-instance Functor I where
-    fmap f (I a) = I $ fmap f a
+instance (Functor f, Functor g) => Functor (f :+: g) where
+    fmap f (Inl e1)  = Inl (fmap f e1)
+    fmap f (Inr e2)  = Inr (fmap f e2)
 
-type App = FreeT I
+instance Functor f => (:<:) f f where
+    inj = id
 
-createInput :: (Functor f, Monad m) => ((a -> FreeT f m a) -> f (FreeT f m a)) -> FreeT f m a
-createInput f = FreeT . return . Free . f $ FreeT . return . Pure
+instance (Functor f, Functor g) => (:<:) f (f :+: g) where
+    inj = Inl
 
-createOutput :: (Functor f, Monad m) => (a -> FreeT f m () -> f (FreeT f m ())) -> a -> FreeT f m ()
-createOutput f x = FreeT . return . Free $ f x (FreeT . return . Pure $ ())
+instance (Functor f, Functor g, Functor h, (:<:) f g) =>
+    (:<:) f (h :+: g) where
+        inj = Inr . inj
 
+inject :: (Monad m, Functor f, Functor g, (:<:) g f) => g (FreeT f m a) -> FreeT f m a
+inject = FreeT . return . Free . inj
+
+type App = FreeT

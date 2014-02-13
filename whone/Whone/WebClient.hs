@@ -1,29 +1,22 @@
+{-# LANGUAGE TypeOperators, FlexibleContexts, ExistentialQuantification #-}
 module Whone.WebClient
-( setUp
-, putRequest
+( putRequest
 , getResponse
 ) where
 
 import Whone.Internal
+import Control.Monad.Trans.Free (FreeT(..), FreeF(..))
 
-data WebClient s i o a =
-    SetUp s a |
-    PutRequest i a |
-    GetResponse (o -> a)
+data WebClient s a =
+    forall i. PutRequest s i a |
+    forall o. GetResponse s (o -> a)
 
-instance Functor (WebClient s i o) where
-    fmap f (SetUp y c) = SetUp y (f c)
-    fmap f (PutRequest y c) = PutRequest y (f c)
-    fmap f (GetResponse g) = GetResponse (f . g)
+instance Functor (WebClient s) where
+    fmap f (PutRequest s y c) = PutRequest s y (f c)
+    fmap f (GetResponse s g) = GetResponse s (f . g)
 
-instance Interface (WebClient s i o)
+putRequest :: (Monad m, WebClient s :<: f) => s -> o -> App f m ()
+putRequest s a = inject (PutRequest s a (FreeT . return . Pure $ ()))
 
-setUp :: (Monad m) => i -> App m ()
-setUp = createOutput ((I.) . SetUp)
-
-putRequest :: (Monad m) => i -> App m ()
-putRequest = createOutput ((I.) . PutRequest)
-
-getResponse :: (Monad m) => App m o
-getResponse = createInput (I . GetResponse)
-
+getResponse :: (Monad m, WebClient s :<: f) => s -> App f m i
+getResponse s = inject (GetResponse s $ FreeT . return . Pure)
