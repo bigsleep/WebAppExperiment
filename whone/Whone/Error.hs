@@ -1,11 +1,11 @@
-{-# LANGUAGE TypeOperators, MultiParamTypeClasses, FlexibleInstances, UndecidableInstances, FlexibleContexts, ExistentialQuantification, ViewPatterns #-}
+{-# LANGUAGE TypeOperators, MultiParamTypeClasses, FlexibleInstances, UndecidableInstances, FlexibleContexts #-}
 module Whone.Error
-() where
+( IError(..)
+) where
 
 import Whone.Internal
 import Control.Monad.Identity (Identity(..))
---import Control.Monad.Error (Error, MonadError, throwError, catchError)
-import Control.Monad.Trans.Free (FreeT(..), FreeF(..), liftF)
+import Control.Monad.Error (Error, MonadError, throwError, catchError)
 
 data IError e a =
     ThrowError e
@@ -13,14 +13,8 @@ data IError e a =
 instance Functor (IError e) where
     fmap _ (ThrowError e) = ThrowError e
 
-{-
 instance (Error e, IError e :<: f) => MonadError e (App f Identity) where
     throwError e = inject (ThrowError e)
-    catchError (FreeT (Identity (Free (inject (ThrowError e))))) f = f e
-    catchError a _ = a
--}
-
-throwError :: (Monad m, IError e :<: f) => e -> App f m a
-throwError = inject . ThrowError
-
---catchError :: (Monad m, IError e :<: f) => App f m a -> (e -> App f m a) -> App f m a
+    catchError a f = case eject a of
+                          Just (ThrowError e) -> f e
+                          _ -> a

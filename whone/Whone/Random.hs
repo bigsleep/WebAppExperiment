@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, FlexibleContexts, ExistentialQuantification #-}
+{-# LANGUAGE TypeOperators, FlexibleContexts #-}
 module Whone.Random
 ( getRandom
 , getRandomR
