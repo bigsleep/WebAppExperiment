@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeOperators, FlexibleContexts, ExistentialQuantification #-}
 module Whone.WebApi
-( getRequest
+( WebApi
+, getRequest
 , putResponse
 ) where
 

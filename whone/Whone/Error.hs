@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, MultiParamTypeClasses, FlexibleInstances, UndecidableInstances, FlexibleContexts #-}
+{-# LANGUAGE TypeOperators, OverlappingInstances, MultiParamTypeClasses, FlexibleInstances, UndecidableInstances, FlexibleContexts #-}
 module Whone.Error
 ( IError(..)
 ) where
@@ -13,8 +13,9 @@ data IError e a =
 instance Functor (IError e) where
     fmap _ (ThrowError e) = ThrowError e
 
-instance (Error e, IError e :<: f) => MonadError e (App f Identity) where
+instance (Functor f, Error e, IError e :<: f) => MonadError e (App f Identity) where
     throwError e = inject (ThrowError e)
     catchError a f = case eject a of
                           Just (ThrowError e) -> f e
                           _ -> a
+
