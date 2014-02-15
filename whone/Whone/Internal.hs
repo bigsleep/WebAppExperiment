@@ -1,14 +1,15 @@
-{-# LANGUAGE TypeOperators, MultiParamTypeClasses, OverlappingInstances, FlexibleInstances #-}
+{-# LANGUAGE TypeOperators, MultiParamTypeClasses, OverlappingInstances, FlexibleInstances, GeneralizedNewtypeDeriving, RankNTypes #-}
 module Whone.Internal
-( (:+:)
+( (:+:)(..)
 , (:<:)
 , inject
 , eject
-, App
+, inj
+, eje
+, App(..)
 ) where
 
-import Control.Monad.Identity (Identity(..))
-import Control.Monad.Trans.Free (FreeT(..), FreeF(..))
+import Control.Monad.Free (Free(..))
 
 data (f :+: g) e = Inl (f e) | Inr (g e)
 infixr 6 :+:
@@ -35,10 +36,11 @@ instance (Functor f, Functor g, Functor h, f :<: g) => f :<: (h :+: g) where
     eje (Inr a) = eje a
     eje _ = Nothing
 
-inject :: (Monad m, g :<: f) => g (FreeT f m a) -> FreeT f m a
-inject = FreeT . return . Free . inj
+inject :: (g :<: f) => g (Free f a) -> Free f a
+inject = Free . inj
 
-eject :: (g :<: f) => FreeT f Identity a -> Maybe (g (FreeT f Identity a))
-eject (FreeT (Identity (Free a))) = eje a
+eject :: (g :<: f) => Free f a -> Maybe (g (Free f a))
+eject (Free a) = eje a
+eject (Pure _) = Nothing
 
-type App = FreeT
+newtype App f a = App {runApp :: Free f a} deriving (Functor, Monad)

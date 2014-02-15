@@ -5,7 +5,7 @@ module Whone.Random
 ) where
 
 import Whone.Internal
-import Control.Monad.Trans.Free (FreeT(..), FreeF(..))
+import Control.Monad.Free (Free(..))
 
 data IRandom x a =
     GetRandom (x -> a) |
@@ -15,8 +15,8 @@ instance Functor (IRandom x) where
     fmap f (GetRandom g) = GetRandom (f . g)
     fmap f (GetRandomR r g) = GetRandomR r (f . g)
 
-getRandom :: (Monad m, IRandom x :<: f) => App f m x
-getRandom = inject (GetRandom $ FreeT . return . Pure)
+getRandom :: (IRandom x :<: f) => App f x
+getRandom = App . inject . GetRandom $ Pure
 
-getRandomR :: (Monad m, IRandom x :<: f) => (x, x) -> App f m x
-getRandomR r = inject (GetRandomR r $ FreeT . return . Pure)
+getRandomR :: (IRandom x :<: f) => (x, x) -> App f x
+getRandomR r = App . inject $ GetRandomR r Pure
