@@ -5,13 +5,12 @@ import Whone.Internal ((:+:)(..), (:<:), App(..))
 import Whone.JsonApi (JsonApi(..), getRequest, putResponse)
 import Whone.Error (IError(..))
 
-import Control.Monad (liftM)
 import Control.Monad.Trans (lift)
 import Control.Monad.State (put)
 import Control.Monad.Reader (ask)
 import Control.Monad.Error (catchError, throwError)
-import Control.Monad.RWS (RWS(..), runRWS)
-import Control.Monad.Free (Free(..))
+import Control.Monad.RWS (RWST(..), runRWST)
+import Control.Monad.Trans.Free (FreeT(..), FreeF(..), iterT)
 import qualified Data.Aeson as DA (FromJSON, ToJSON, decode, encode)
 import qualified Data.ByteString.Lazy as L (ByteString, readFile)
 
@@ -27,7 +26,7 @@ jsonApiSpec :: Spec
 jsonApiSpec = prop "入力をそのまま返すAPI" $
     \(i :: [Int]) ->
         let s = DA.encode i
-            (_, r, _) = runRWS (run' jsonApi1) s ""
+            (Left r) = runRWST (run' jsonApi1) s ()
             message = "result: " ++ show r ++ " expected: " ++ show s
             result = if r == s
                         then P.succeeded
@@ -38,7 +37,7 @@ throwErrorApiSpec :: Spec
 throwErrorApiSpec = prop "入力が空の場合にエラーになるテスト" $
     \(i :: [Int]) ->
         let s = DA.encode i
-            (_, r, _) = runRWS (run' maybeThrowErrorApi1) s ""
+            (Left r) = runRWST (run' maybeThrowErrorApi1) s ()
             expected = if i == [] then DA.encode ("error: input should be greater 0" :: String) else s
             message = "result: " ++ show r ++ " expected: " ++ show expected
             result = if r == expected
@@ -48,7 +47,7 @@ throwErrorApiSpec = prop "入力が空の場合にエラーになるテスト" $
 
 -- テスト用API
 type F = JsonApi :+: IError String
-type JsonApp = App F
+type JsonApp = App F Mock
 
 wapp :: (DA.FromJSON i, DA.ToJSON o) => (i -> JsonApp o) -> JsonApp ()
 wapp doSomeThing = (getRequest >>= doSomeThing >>= putResponse)
@@ -67,14 +66,13 @@ maybeThrowErrorApi1 = wapp f
                            else return i
 
 -- プログラム実行用関数
-type Mock = RWS L.ByteString () L.ByteString ()
+type Mock = RWST L.ByteString () () (Either L.ByteString)
 
-run' :: JsonApp a -> Mock
-run' (App (Free a)) = run a
-run' (App (Pure a)) = return ()
+run' :: JsonApp a -> Mock a
+run' a = iterT run (runApp a)
 
 class (Functor f) => Run f where
-    run :: f (Free F a) -> Mock
+    run :: f (Mock a) -> Mock a
 
 instance (Run f, Run g) => Run (f :+: g) where
     run (Inl a) = run a
@@ -83,10 +81,9 @@ instance (Run f, Run g) => Run (f :+: g) where
 instance Run JsonApi where
     run (GetRequest f) = ask >>= \s ->
                          case DA.decode s of
-                              Just i -> run' . App . f $ i
-                              Nothing -> run (ThrowError ("parse error: " ++ show s :: String))
-    run (PutResponse o c) = put (DA.encode o) >> run' (App c)
+                              Just i -> (f $ i)
+                              _ -> run (ThrowError ("parse error: " ++ show s :: String))
+    run (PutResponse o c) = (lift . Left . DA.encode $ o) >> c
 
 instance Run (IError String) where
-    run (ThrowError s) = put (DA.encode s) >> return ()
-
+    run (ThrowError s) = lift . Left . DA.encode $ s

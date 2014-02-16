@@ -9,7 +9,7 @@ module Whone.Internal
 , App(..)
 ) where
 
-import Control.Monad.Free (Free(..))
+import Control.Monad.Trans.Free (FreeT(..), FreeF(..))
 
 data (f :+: g) e = Inl (f e) | Inr (g e)
 infixr 6 :+:
@@ -36,11 +36,12 @@ instance (Functor f, Functor g, Functor h, f :<: g) => f :<: (h :+: g) where
     eje (Inr a) = eje a
     eje _ = Nothing
 
-inject :: (g :<: f) => g (Free f a) -> Free f a
-inject = Free . inj
+inject :: (Monad m, g :<: f) => g (FreeT f m a) -> FreeT f m a
+inject = FreeT . return . Free . inj
 
-eject :: (g :<: f) => Free f a -> Maybe (g (Free f a))
-eject (Free a) = eje a
-eject (Pure _) = Nothing
+eject :: (Monad m, g :<: f) => FreeT f m a -> m (Maybe (g (FreeT f m a)))
+eject m = runFreeT m >>= return . f
+    where f (Free x) = eje x
+          f (Pure _) = Nothing
 
-newtype App f a = App {runApp :: Free f a} deriving (Functor, Monad)
+newtype App f m a = App {runApp :: FreeT f m a} deriving (Functor, Monad)
