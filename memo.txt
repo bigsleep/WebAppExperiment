@@ -1,3 +1,58 @@
+------------------------------------------------
+20140216 :<:, :+:
+
+型引数を三つ以上とる型だと上手くいかない?
+instanceがoverlapしているといわれてえらーになる
+
+((A i o) :<: f)とかが上手くいかない
+
+よくわからない。
+
+型が文脈上不明な感じだったからかも。
+型情報使ってる場合はセーフっぽかった
+
+大丈夫だったコード
+>||
+{-# LANGUAGE TypeOperators, FlexibleContexts #-}
+module Whone.WIO
+() where
+
+import Whone.Internal
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Free (FreeT(..))
+
+data Signature i o = Signature
+
+data WIO i o a = WIO (Signature i o)
+
+instance Functor (WIO i o) where
+    fmap _ (WIO s) = (WIO s)
+
+wio :: (Monad m, WIO i o :<: f) => Signature i o -> App f m a
+wio s = App . inject $ WIO s
+||<
+
+エラー出る
+>||
+{-# LANGUAGE TypeOperators, FlexibleContexts #-}
+module Whone.WIO
+() where
+
+import Whone.Internal
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Free (FreeT(..))
+
+data Signature i o = Signature
+
+data WIO i o a = WIO
+
+instance Functor (WIO i o) where
+    fmap _ WIO = WIO
+
+wio :: (Monad m, WIO i o :<: f) => App f m a
+wio = App . inject $ WIO
+||<
+
 --------------------------------------------------
 20140213 評価
 
