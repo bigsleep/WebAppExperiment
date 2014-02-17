@@ -1,3 +1,38 @@
+-------------------------------------------------
+20140217 Logger
+
+ログレベルは入れる
+ログに吐く型 StringとかTextとかも
+ファイルとかは?
+設定ログレベルの取得?
+
+ファイルに吐くならファイルパスとかの設定はどうする?
+DBに吐くとかもある? ログ用APIとか
+DBならDBサーバーとかDB名とか
+APIならurlとか
+fluentdに流すとか
+
+JSON用のロガーとかもあるか
+JSONにエンコードできれば何でも渡せるとか
+
+data LogLevel = DEBUG | INFO | wARNING | ERROR deriving (Show, Eq, Ord, Enum)
+
+data Logger c s =
+    GetCurrentLogLevel c (LogLevel -> a) |
+    Log c l s a
+
+getCurrentLogLevel c = inject . Getcurrentloglevel c $ FreeT . return . Pure
+
+log l c s = do
+    clevel <- getcurrentloglevel c
+    when (l >= c) (inject . Log c l s (FreeT . return . Pure $ ()))
+
+logDebug = log DEBUG
+logInfo = log INFO
+logWarning = log WARNING
+logError = log ERROR
+
+
 ------------------------------------------------
 20140216 :<:, :+:
 
@@ -10,6 +45,10 @@ instanceがoverlapしているといわれてえらーになる
 
 型が文脈上不明な感じだったからかも。
 型情報使ってる場合はセーフっぽかった
+制約条件にしか現れない型が問題?
+関数引数だけ足してもだめでコンストラクタにも型情報もった引数入れないとだめだった
+制約条件の型変数と値のほうの型変数が一致するという情報が入ってないからのような気がする。
+関数を2段階にするとかでいけるのでは
 
 大丈夫だったコード
 >||
