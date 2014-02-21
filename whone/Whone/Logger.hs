@@ -1,7 +1,6 @@
 {-# LANGUAGE TypeOperators, FlexibleContexts, FlexibleInstances, ExistentialQuantification, TypeFamilies #-}
 module Whone.ILogger
 ( ILogger(..)
-, Logger
 , LogLevel
 , getCurrentLogLevel
 , log
@@ -18,8 +17,7 @@ import Control.Monad.Trans.Free (FreeT(..), FreeF(..))
 
 data LogLevel = DEBUG | INFO | WARNING | ERROR deriving (Show, Read, Eq, Ord, Enum)
 
-class Logger a where
-    type OutputType a
+type family OutputType a :: *
 
 data ILogger logger a =
     GetCurrentLogLevel logger (LogLevel -> a) |
@@ -32,12 +30,12 @@ instance Functor (ILogger logger) where
 getCurrentLogLevel :: (Functor f, Monad m, ILogger logger :<: f) => logger -> App f m LogLevel
 getCurrentLogLevel logger = App . inject $ GetCurrentLogLevel logger $ FreeT . return . Pure
 
-log :: forall m logger f. (Monad m, Logger logger, ILogger logger :<: f) => LogLevel -> logger -> OutputType logger -> App f m ()
+log :: forall m logger f. (Monad m, ILogger logger :<: f) => LogLevel -> logger -> OutputType logger -> App f m ()
 log level logger contents = do
     clevel <- getCurrentLogLevel logger
     when (level >= clevel) (App . inject $ Log logger level contents (FreeT . return . Pure $ ()))
 
-logDebug, logInfo, logWarning, logError :: (Monad m, Logger logger, ILogger logger :<: f) => logger -> OutputType logger -> App f m ()
+logDebug, logInfo, logWarning, logError :: (Monad m, ILogger logger :<: f) => logger -> OutputType logger -> App f m ()
 logDebug = log DEBUG
 logInfo = log INFO
 logWarning = log WARNING
