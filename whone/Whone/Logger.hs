@@ -33,8 +33,9 @@ getCurrentLogLevel logger = App . inject $ GetCurrentLogLevel logger $ FreeT . r
 
 log :: (Monad m, ILogger logger :<: f) => LogLevel -> logger -> OutputType logger -> App f m ()
 log level logger contents = do
-    clevel <- getCurrentLogLevel logger
-    when (level >= clevel) (App . inject $ Log logger level contents (FreeT . return . Pure $ ()))
+    lv <- getCurrentLogLevel logger
+    when (level >= lv) $
+         App . inject $ Log logger level contents (FreeT . return . Pure $ ())
 
 logDebug, logInfo, logWarning, logError :: (Monad m, ILogger logger :<: f) => logger -> OutputType logger -> App f m ()
 logDebug = log DEBUG

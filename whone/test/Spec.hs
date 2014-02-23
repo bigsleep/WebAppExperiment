@@ -5,6 +5,8 @@ import Whone.Internal ((:+:)(..), (:<:), App(..))
 import Whone.JsonApi (JsonApi(..), getRequest, putResponse)
 import Whone.Error (IError(..))
 
+import Whone.Backends.Logger.Mock ()
+
 import Control.Monad.Trans (lift)
 import Control.Monad.State (put)
 import Control.Monad.Reader (ask)

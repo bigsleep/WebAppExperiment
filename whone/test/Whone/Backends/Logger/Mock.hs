@@ -4,7 +4,10 @@ module Whone.Backends.Logger.Mock
 ) where
 
 import Whone.Logger (ILogger(..), LogLevel(..), OutputType)
-import Control.Monad.Writer (MonadWriter, tell)
+import Control.Monad.State (MonadState, get, put)
 
-run :: (Monad m, MonadWriter w m, OutputType logger ~ w) => LogLevel -> ILogger logger (m a) -> m a
-run l (Log _ lv s a) = if lv >= l then tell s >> a else a
+run :: (Monad m, MonadState s m, [(LogLevel, OutputType logger)] ~ s) => LogLevel -> ILogger logger (m a) -> m a
+
+run _ (Log _ lv s a) = get >>= \x -> put (x ++ [(lv, s)]) >> a
+
+run l (GetCurrentLogLevel _ g) = g l
