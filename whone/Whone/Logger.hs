@@ -1,13 +1,14 @@
-{-# LANGUAGE TypeOperators, FlexibleContexts, FlexibleInstances, ExistentialQuantification, TypeFamilies #-}
-module Whone.ILogger
+{-# LANGUAGE TypeOperators, FlexibleContexts, FlexibleInstances, TypeFamilies #-}
+module Whone.Logger
 ( ILogger(..)
-, LogLevel
+, LogLevel(..)
 , getCurrentLogLevel
 , log
 , logDebug
 , logInfo
 , logWarning
 , logError
+, OutputType
 ) where
 
 import Whone.Internal
@@ -30,7 +31,7 @@ instance Functor (ILogger logger) where
 getCurrentLogLevel :: (Functor f, Monad m, ILogger logger :<: f) => logger -> App f m LogLevel
 getCurrentLogLevel logger = App . inject $ GetCurrentLogLevel logger $ FreeT . return . Pure
 
-log :: forall m logger f. (Monad m, ILogger logger :<: f) => LogLevel -> logger -> OutputType logger -> App f m ()
+log :: (Monad m, ILogger logger :<: f) => LogLevel -> logger -> OutputType logger -> App f m ()
 log level logger contents = do
     clevel <- getCurrentLogLevel logger
     when (level >= clevel) (App . inject $ Log logger level contents (FreeT . return . Pure $ ()))
