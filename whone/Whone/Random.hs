@@ -1,22 +1,24 @@
-{-# LANGUAGE TypeOperators, FlexibleContexts #-}
+{-# LANGUAGE TypeOperators, FlexibleContexts, ExistentialQuantification #-}
 module Whone.Random
-( getRandom
+( IRandom(..)
+, getRandom
 , getRandomR
 ) where
 
 import Whone.Internal
+import System.Random (Random)
 import Control.Monad.Trans.Free (FreeT(..), FreeF(..))
 
-data IRandom x a =
-    GetRandom (x -> a) |
-    GetRandomR (x, x) (x -> a)
+data IRandom a =
+    forall x. (Random x) => GetRandom (x -> a) |
+    forall x. (Random x) => GetRandomR (x, x) (x -> a)
 
-instance Functor (IRandom x) where
+instance Functor IRandom where
     fmap f (GetRandom g) = GetRandom (f . g)
     fmap f (GetRandomR r g) = GetRandomR r (f . g)
 
-getRandom :: (Monad m, IRandom x :<: f) => App f m x
+getRandom :: (Random x, Monad m, IRandom :<: f) => App f m x
 getRandom = App . inject . GetRandom $ FreeT . return . Pure
 
-getRandomR :: (Monad m, IRandom x :<: f) => (x, x) -> App f m x
+getRandomR :: (Random x, Monad m, IRandom :<: f) => (x, x) -> App f m x
 getRandomR r = App . inject . GetRandomR r $ FreeT . return . Pure
