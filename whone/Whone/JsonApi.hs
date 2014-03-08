@@ -1,24 +1,16 @@
-{-# LANGUAGE TypeOperators, FlexibleContexts, ExistentialQuantification #-}
+{-# LANGUAGE TypeOperators, FlexibleContexts, TypeFamilies #-}
 module Whone.JsonApi
 ( JsonApi(..)
-, getRequest
-, putResponse
+, jsonApi
 ) where
 
 import Whone.Internal
 import Control.Monad.Trans.Free (FreeT(..), FreeF(..))
-import Data.Aeson (ToJSON, FromJSON)
 
-data JsonApi a =
-    forall i. (FromJSON i) => GetRequest (i -> a) |
-    forall o. (ToJSON o) => PutResponse o a
+data JsonApi i o m a = JsonApi (i -> m o) a
 
-instance Functor JsonApi where
-    fmap f (GetRequest g) = GetRequest (f . g)
-    fmap f (PutResponse y c) = PutResponse y (f c)
+instance Functor (JsonApi i o m) where
+    fmap f (JsonApi b a) = JsonApi b (f a)
 
-getRequest :: (Monad m, JsonApi :<: f, FromJSON i) => App f m i
-getRequest = App . inject . GetRequest $ FreeT . return . Pure
-
-putResponse :: (Monad m, JsonApi :<: f, ToJSON o) => o -> App f m ()
-putResponse a = App . inject $ PutResponse a (FreeT . return . Pure $ ())
+jsonApi :: (Monad m, JsonApi i o n :<: f) => (i -> n o) -> App f m ()
+jsonApi api = App . inject . JsonApi api $ (FreeT . return . Pure $ ())

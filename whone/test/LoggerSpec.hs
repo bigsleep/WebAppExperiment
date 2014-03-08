@@ -5,7 +5,7 @@ module LoggerSpec
 
 import Whone.Internal ((:+:)(..), App(..))
 import qualified Whone.Logger as L (ILogger(..), LogLevel(..), OutputType, log, logDebug, logInfo, logWarning, logError)
-import Whone.JsonApi (JsonApi(..), getRequest, putResponse)
+import Whone.JsonApi (JsonApi(..), jsonApi)
 import Whone.Error (IError(..))
 
 import qualified Whone.Backends.Logger.Mock as LM (run)
@@ -18,7 +18,7 @@ import Control.Monad.RWS (RWST(..))
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Free (iterT)
 import qualified Data.ByteString.Lazy as BS (ByteString, drop)
-import qualified Data.Aeson as DA (decode, encode)
+import qualified Data.Aeson as DA (FromJSON, ToJSON, decode, encode)
 
 import Test.Hspec
 import Test.Hspec.QuickCheck
@@ -26,8 +26,9 @@ import qualified Test.QuickCheck.Property as P
 import qualified Test.QuickCheck as Q (Arbitrary, arbitrary, elements)
 
 type M = RWST BS.ByteString () [(L.LogLevel, String)] (Either (String, [(L.LogLevel, String)]))
-type F = L.ILogger () :+: JsonApi :+: IError String
-type MyApp = App F M
+type F i o = L.ILogger () :+: JsonApi i o (N i o) :+: IError String
+newtype N i o a = N { runN :: MyApp i o a }
+type MyApp i o = App (F i o) M
 
 loggerSpec :: Spec
 loggerSpec = spec1 >> spec2 >> spec3
@@ -41,7 +42,8 @@ spec1 = prop "ログ確認テスト" $
                 (L.INFO, "app1 start"),
                 (L.INFO, "request: " ++ show s),
                 (L.INFO, "this api just return input"),
-                (L.INFO, "response: " ++ show s)]
+                (L.INFO, "response: " ++ show s),
+                (L.INFO, "app1 end")]
             Right (_, l, _) = runRWST (run' app1) s []
             message = "result: " ++ show l ++ " expected: " ++ show expected
             result = if l == expected
@@ -66,7 +68,7 @@ spec2 = prop "パースエラー時ログ" $
 spec3 :: Spec
 spec3 = prop "ログレベル" $
     \((i, s) :: (L.LogLevel, String)) ->
-        let app = L.log i () s
+        let app = L.log i () s :: MyApp () () ()
             Right (_, l, _) = runRWST (run' app) "" []
             expected = if i >= L.INFO then [(i, s)] else []
             message = "result: " ++ show l ++ " expected: " ++ show expected
@@ -78,22 +80,25 @@ spec3 = prop "ログレベル" $
 
 
 -- apps
-app1 :: MyApp ()
-app1 = do
-    L.logInfo () "app1 start"
-    i <- getRequest :: MyApp [Int]
+app1' :: [Int] -> MyApp [Int] [Int] [Int]
+app1' i = do
     L.logInfo () ("request: " ++ show (DA.encode i))
     L.logInfo () "this api just return input"
     L.logInfo () ("response: " ++ show (DA.encode i))
-    putResponse i
+    return i
 
+app1 :: MyApp [Int] [Int] ()
+app1 = do
+    L.logInfo () "app1 start"
+    jsonApi $ N . app1'
+    L.logInfo () "app1 end"
 
 
 -- for run MyApp
 class (Functor f) => Run f where
     run :: f (M a) -> M a
 
-run' :: MyApp a -> M a
+run' :: (DA.FromJSON i, DA.ToJSON o) => MyApp i o a -> M a
 run' = iterT run . runApp
 
 instance (Run f, Run g) => Run (f :+: g) where
@@ -109,16 +114,15 @@ instance Run (IError String) where
     run = EM.run onError
         where onError :: String -> M a
               onError s = do
-                          run' (L.logError () s)
+                          run' (L.logError () s :: MyApp () () ()) :: M ()
                           logs <- get
                           lift . Left $ (s, logs)
 
-instance Run JsonApi where
-    run (GetRequest f) = ask >>= \s ->
+instance (DA.FromJSON i, DA.ToJSON o) => Run (JsonApi i o (N i o)) where
+    run (JsonApi f c) = ask >>= \s ->
                          case DA.decode s of
-                              Just i -> f i
-                              Nothing -> run' . throwError $ "parse error: " ++ show s
-    run (PutResponse _ c) = c
+                              Just i -> (run' . runN . f $ i) >> c
+                              Nothing -> run' (throwError $ "parse error: " ++ show s :: MyApp i o a)
 
 
 
