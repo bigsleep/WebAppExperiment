@@ -76,7 +76,7 @@ instance Run (JsonApi N) where
     run (JsonApi f c) = do
         s <- ask
         case DA.decode s of
-             Just i -> (run' . runN . f $ i) >>= lift .Left . DA.encode >> c
+             Just i -> (run' . runN . f $ i) >>= lift . Left . DA.encode >> c
              _ -> run (ThrowError ("parse error: " ++ show s :: String))
 
 instance Run (IError String) where

@@ -20,7 +20,7 @@ instance Functor (JsonApi m) where
     fmap f (JsonApi b a) = JsonApi b (f a)
 
 jsonApi :: (DA.FromJSON i, DA.ToJSON o, Monad m, JsonApi n :<: f) => (i -> n o) -> App f m ()
-jsonApi api = App . liftF . inject . JsonApi api $ ()
+jsonApi api = App . liftF . inject $ JsonApi api ()
 
 data HttpError = HttpError {
     httpErrorStatus :: HTTP.Status,
