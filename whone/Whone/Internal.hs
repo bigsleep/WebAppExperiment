@@ -4,8 +4,6 @@ module Whone.Internal
 , (:<:)
 , inject
 , eject
-, inj
-, eje
 , App(..)
 ) where
 
@@ -15,7 +13,7 @@ data (f :+: g) e = Inl (f e) | Inr (g e)
 infixr 6 :+:
 
 class (Functor sub, Functor sup) => sub :<: sup where
-    inj :: sub a -> sup a
+    inject :: sub a -> sup a
     eje :: sup a -> Maybe (sub a)
 
 instance (Functor f, Functor g) => Functor (f :+: g) where
@@ -23,21 +21,18 @@ instance (Functor f, Functor g) => Functor (f :+: g) where
     fmap f (Inr e2)  = Inr (fmap f e2)
 
 instance Functor f => f :<: f where
-    inj = id
+    inject = id
     eje = Just
 
 instance (Functor f, Functor g) => f :<: (f :+: g) where
-    inj = Inl
+    inject = Inl
     eje (Inl a) = Just a
     eje _ = Nothing
 
 instance (Functor f, Functor g, Functor h, f :<: g) => f :<: (h :+: g) where
-    inj = Inr . inj
+    inject = Inr . inject
     eje (Inr a) = eje a
     eje _ = Nothing
-
-inject :: (Monad m, g :<: f) => g (FreeT f m a) -> FreeT f m a
-inject = FreeT . return . Free . inj
 
 eject :: (Monad m, g :<: f) => FreeT f m a -> m (Maybe (g (FreeT f m a)))
 eject m = runFreeT m >>= return . f
