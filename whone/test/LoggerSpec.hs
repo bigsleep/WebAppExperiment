@@ -5,7 +5,7 @@ module LoggerSpec
 
 import Whone.Internal ((:+:)(..), App(..))
 import qualified Whone.Logger as L (ILogger(..), LogLevel(..), OutputType, log, logDebug, logInfo, logWarning, logError)
-import Whone.JsonApi (JsonApi(..), jsonApi)
+import Whone.JsonApi (JsonApi(..), jsonInput, jsonOutput)
 import Whone.Error (IError(..))
 
 import qualified Whone.Backends.Logger.Mock as LM (run)
@@ -26,8 +26,7 @@ import qualified Test.QuickCheck.Property as P
 import qualified Test.QuickCheck as Q (Arbitrary, arbitrary, elements)
 
 type M = RWST BS.ByteString () [(L.LogLevel, String)] (Either (String, [(L.LogLevel, String)]))
-type F = L.ILogger () :+: JsonApi N :+: IError String
-newtype N a = N { runN :: MyApp a }
+type F = L.ILogger () :+: JsonApi :+: IError String
 type MyApp = App F M
 
 loggerSpec :: Spec
@@ -90,7 +89,7 @@ app1' i = do
 app1 :: MyApp ()
 app1 = do
     L.logInfo () "app1 start"
-    jsonApi $ N . app1'
+    jsonInput app1' >>= jsonOutput
     L.logInfo () "app1 end"
 
 
@@ -118,11 +117,13 @@ instance Run (IError String) where
                           logs <- get
                           lift . Left $ (s, logs)
 
-instance Run (JsonApi N) where
-    run (JsonApi f c) = ask >>= \s ->
-                        case DA.decode s of
-                             Just i -> (run' . runN . f $ i) >> c
-                             Nothing -> run' (throwError $ "parse error: " ++ show s :: MyApp a)
+instance Run JsonApi where
+    run (JsonInput f) = ask >>= \s ->
+        case DA.decode s of
+             Just i -> f i
+             Nothing -> run' (throwError $ "parse error: " ++ show s :: MyApp a)
+
+    run (JsonOutput _ c) = c
 
 
 

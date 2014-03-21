@@ -10,10 +10,12 @@ import qualified Data.Aeson as DA (decode, encode)
 import qualified Data.ByteString.Lazy as L (ByteString)
 
 run :: (MonadReader L.ByteString m, MonadState L.ByteString m) =>
-       (String -> m a) -> (forall b. n b -> m b) -> JsonApi n (m a) -> m a
+       (String -> m a) -> JsonApi (m a) -> m a
 
-run onError run' (JsonApi f c) = do
+run onError (JsonInput f) = do
     s <- ask
     case DA.decode s of
-         Just i -> run' (f i) >>= put . DA.encode >> c
+         Just i -> f i
          Nothing -> onError $ "parse error: " ++ show s
+
+run _ (JsonOutput o c) = put (DA.encode o) >> c

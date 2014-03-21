@@ -1,26 +1,34 @@
 {-# LANGUAGE TypeOperators, FlexibleContexts, ExistentialQuantification #-}
 module Whone.JsonApi
 ( JsonApi(..)
-, jsonApi
+, jsonInput
+, jsonOutput
 , HttpError(..)
 ) where
 
 import Whone.Internal
 
 import Control.Monad.Error (Error, noMsg, strMsg)
-import Control.Monad.Trans.Free (liftF)
+import Control.Monad.Trans.Free (liftF, FreeT(..), FreeF(..))
 import qualified Data.ByteString.Lazy as L (ByteString, empty)
 import qualified Data.ByteString.Lazy.Char8 as L (pack)
 import qualified Data.Aeson as DA (FromJSON, ToJSON)
 import qualified Network.HTTP.Types as HTTP (Status, Header, status404)
 
-data JsonApi m a = forall i o. (DA.FromJSON i, DA.ToJSON o) =>JsonApi (i -> m o) a
+data JsonApi a =
+    forall i. DA.FromJSON i => JsonInput (i -> a) |
+    forall o. DA.ToJSON o => JsonOutput o a
 
-instance Functor (JsonApi m) where
-    fmap f (JsonApi b a) = JsonApi b (f a)
+instance Functor JsonApi where
+    fmap f (JsonInput g) = JsonInput (f . g)
+    fmap f (JsonOutput o a) = JsonOutput o (f a)
 
-jsonApi :: (DA.FromJSON i, DA.ToJSON o, Monad m, JsonApi n :<: f) => (i -> n o) -> App f m ()
-jsonApi api = App . liftF . inject $ JsonApi api ()
+
+jsonInput :: (DA.FromJSON i, Monad m, JsonApi :<: f) => (i -> App f m a) -> App f m a
+jsonInput a = App . FreeT . return . Free . inject . JsonInput $ (runApp . a)
+
+jsonOutput :: (DA.ToJSON o, Monad m, JsonApi :<: f) => o -> App f m ()
+jsonOutput o = App . liftF . inject $ JsonOutput o ()
 
 data HttpError = HttpError {
     httpErrorStatus :: HTTP.Status,

@@ -1,15 +1,15 @@
-{-# LANGUAGE TypeOperators, MultiParamTypeClasses, FlexibleInstances, ScopedTypeVariables, OverloadedStrings #-}
+{-# LANGUAGE TypeOperators, MultiParamTypeClasses, FlexibleInstances, FlexibleContexts, ScopedTypeVariables, OverloadedStrings #-}
 module JsonApiSpec
 ( jsonApiSpec
 ) where
 
-import Whone.Internal ((:+:)(..), App(..))
-import Whone.JsonApi (JsonApi(..), jsonApi)
+import Whone.Internal ((:+:)(..), App(..), (:<:))
+import Whone.JsonApi (JsonApi(..), jsonInput, jsonOutput)
 import Whone.Error (IError(..))
 
 import Control.Monad.Trans (lift)
 import Control.Monad.Reader (ask)
-import Control.Monad.Error (throwError)
+import Control.Monad.Error (throwError, MonadError)
 import Control.Monad.RWS (RWST(..), runRWST)
 import Control.Monad.Trans.Free (iterT)
 import qualified Data.Aeson as DA (decode, encode)
@@ -47,18 +47,18 @@ throwErrorApiSpec = prop "入力が空の場合にエラーになるテスト" $
         in result
 
 -- テスト用API
-type F = JsonApi N :+: IError String
-newtype N a = N { runN :: App F Mock a }
+type F = JsonApi :+: IError String
 type JsonApp = App F Mock
 
-jsonApi1 :: JsonApp ()
-jsonApi1 = jsonApi (N . return . id :: [Int] -> N [Int])
+jsonApi1 :: (Monad m, JsonApi :<: f) => App f m ()
+jsonApi1 = jsonInput (return . (id :: [Int] -> [Int])) >>= jsonOutput
 
-maybeThrowErrorApi1 :: JsonApp ()
-maybeThrowErrorApi1 = jsonApi f
-    where f :: [Int] -> N [Int]
-          f i = if i == [] then N . throwError $ ("error: input should be greater 0" :: String)
-                           else N . return $ i
+maybeThrowErrorApi1 :: (Monad m, JsonApi :<: f, IError String :<: f) => App f m ()
+maybeThrowErrorApi1 = jsonInput f >>= jsonOutput
+    where f :: MonadError String m => [Int] -> m [Int]
+          f i = if i == [] then throwError $ ("error: input should be greater 0" :: String)
+                           else return i
+
 -- プログラム実行用関数
 type Mock = RWST L.ByteString () () (Either L.ByteString)
 
@@ -72,12 +72,13 @@ instance (Run f, Run g) => Run (f :+: g) where
     run (Inl a) = run a
     run (Inr a) = run a
 
-instance Run (JsonApi N) where
-    run (JsonApi f c) = do
+instance Run JsonApi where
+    run (JsonInput f) = do
         s <- ask
         case DA.decode s of
-             Just i -> (run' . runN . f $ i) >>= lift . Left . DA.encode >> c
+             Just i -> f i
              _ -> run (ThrowError ("parse error: " ++ show s :: String))
+    run (JsonOutput o a) = (lift . Left . DA.encode $ o) >> a
 
 instance Run (IError String) where
     run (ThrowError s) = lift . Left . DA.encode $ s
