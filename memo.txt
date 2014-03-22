@@ -1,5 +1,14 @@
+---------------------------------------------------------------------
+20140322 cabal
+
+hackageとかにないlocalのパッケージを使うとき
+
+cabal sandbox add-source path
+
+でできた
+
 -------------------------------------------------------
-20140323 path
+20140322 path
 
 rawPathInfo :: Request -> ByteString
 rawQueryInfo :: Request -> ByteString
