@@ -10,7 +10,6 @@ import Data.Maybe (isJust)
 import qualified Data.List as L (find)
 import qualified Network.HTTP.Types as HTTP (StdMethod(..))
 import qualified Data.ByteString as B (ByteString)
-import qualified Data.ByteString.Char8 as B (split, head)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Free (iterT)
 import Control.Monad.Reader (ReaderT(..), runReaderT, ask)
@@ -22,12 +21,14 @@ routesSpec = describe "Routes" $
     it "dispatch correctly" $ do
         test HTTP.GET "/" `shouldBe` Just "root"
         test HTTP.POST "/" `shouldBe` Nothing
+        test HTTP.GET "/////////////" `shouldBe` Just "root"
         test HTTP.GET "/news" `shouldBe` Just "news"
         test HTTP.GET "/blog/2014/03/21" `shouldBe` Just "blog"
+        test HTTP.GET "/blog////2014///03//21/////" `shouldBe` Just "blog"
         test HTTP.GET "/blog/2013/03/21" `shouldBe` Just "blog"
         test HTTP.GET "/blog/2014/03/21/00/00" `shouldBe` Nothing
         test HTTP.POST "/user/register" `shouldBe` Just "register"
-    where test = curry $ runReaderT (run' myapp)
+    where test = curry . runReaderT . run' $ myapp
 
 myapp :: MyApp B.ByteString
 myapp = [parseRoutes|
@@ -68,5 +69,4 @@ instance Run Routes where
              Nothing -> lift Nothing
         where f m url (route, _) =
                 m == routeMethod route &&
-                B.head url == '/' &&
-                isJust (matchRoute (routePattern route) (tail . B.split '/' $ url))
+                isJust (matchRoute (routePattern route) url)

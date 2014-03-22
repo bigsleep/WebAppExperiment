@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, FlexibleContexts, TemplateHaskell #-}
+{-# LANGUAGE TypeOperators, FlexibleContexts, TemplateHaskell, OverloadedStrings #-}
 module Whone.Routes
 ( Routes(..)
 , RouteDefinition(..)
@@ -13,7 +13,7 @@ import Whone.Internal
 import qualified Network.HTTP.Types as HTTP (StdMethod(..))
 import qualified Data.List as L (break)
 import qualified Data.ByteString as B (ByteString, empty)
-import qualified Data.ByteString.Char8 as B (pack)
+import qualified Data.ByteString.Char8 as B (pack, head, split)
 import Control.Monad (when)
 import Control.Monad.Trans.Free (FreeT(..), FreeF(..))
 
@@ -41,8 +41,11 @@ data RoutePattern =
     RouteParameter B.ByteString
     deriving (Show, Eq)
 
-matchRoute :: [RoutePattern] -> [B.ByteString] -> Maybe [(B.ByteString, B.ByteString)]
-matchRoute pattern route = do
+matchRoute :: [RoutePattern] -> B.ByteString -> Maybe [(B.ByteString, B.ByteString)]
+matchRoute _ "" = Nothing
+matchRoute pattern url = do
+    when (B.head url /= '/') Nothing
+    let route = filter (/= "") . B.split '/' $ url
     when (length pattern /= length route) Nothing
     sequence . filter (/= emp) . fmap match $ zip pattern route
     where match (RoutePath a, b) = if a == b then emp else Nothing
@@ -71,7 +74,7 @@ parseEntry = f . words
           f _ = error "invalid entry pattern"
 
 parseRoute :: String -> [RoutePattern]
-parseRoute ('/' : s) = split s
+parseRoute ('/' : s) = filter (/= RoutePath "") . split $ s
     where split a = case L.break (== '/') a of
                          (h, '/' : t) -> routePatternFromString h : split t
                          (h, _) -> [routePatternFromString h]
