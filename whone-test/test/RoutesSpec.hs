@@ -6,10 +6,10 @@ module RoutesSpec
 import Whone.Internal (App(..))
 import Whone.Routes (Routes(..), parseRoutes, routeMethod, routePattern, matchRoute)
 
-import Data.Maybe (isJust)
-import qualified Data.List as L (find)
+import Data.Maybe (isJust, fromJust)
+import qualified Data.List as L (find, lookup)
 import qualified Network.HTTP.Types as HTTP (StdMethod(..))
-import qualified Data.ByteString as B (ByteString)
+import qualified Data.ByteString as B (ByteString, concat)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Free (iterT)
 import Control.Monad.Reader (ReaderT(..), runReaderT, ask)
@@ -23,9 +23,9 @@ routesSpec = describe "Routes" $
         test HTTP.POST "/" `shouldBe` Nothing
         test HTTP.GET "/////////////" `shouldBe` Just "root"
         test HTTP.GET "/news" `shouldBe` Just "news"
-        test HTTP.GET "/blog/2014/03/21" `shouldBe` Just "blog"
-        test HTTP.GET "/blog////2014///03//21/////" `shouldBe` Just "blog"
-        test HTTP.GET "/blog/2013/03/21" `shouldBe` Just "blog"
+        test HTTP.GET "/blog/2014/03/21" `shouldBe` Just "blog-2014-03-21"
+        test HTTP.GET "/blog////2014///03//21/////" `shouldBe` Just "blog-2014-03-21"
+        test HTTP.GET "/blog/2013/03/21" `shouldBe` Just "blog-2013-03-21"
         test HTTP.GET "/blog/2014/03/21/00/00" `shouldBe` Nothing
         test HTTP.POST "/user/register" `shouldBe` Just "register"
     where test = curry . runReaderT . run' $ myapp
@@ -47,8 +47,13 @@ root = return "root"
 news :: MyApp B.ByteString
 news = return "news"
 
-blog :: MyApp B.ByteString
-blog = return "blog"
+blog :: [(B.ByteString, B.ByteString)] -> MyApp B.ByteString
+blog params = do
+    let year = getParam "year"
+    let month = getParam "month"
+    let day = getParam "day"
+    return . B.concat $ ["blog-", year, "-", month, "-", day]
+    where getParam n = fromJust (L.lookup n params)
 
 register :: MyApp B.ByteString
 register = return "register"
@@ -64,9 +69,8 @@ class Run f where
 instance Run Routes where
     run (Routes rs) = do
         (m, url) <- ask
-        case L.find (f m url) rs of
-             Just (_, a) -> a
-             Nothing -> lift Nothing
-        where f m url (route, _) =
-                m == routeMethod route &&
-                isJust (matchRoute (routePattern route) url)
+        case L.find isJust (g m url rs) of
+             Just (Just a) -> a
+             _ -> lift Nothing
+        where g m url = fmap (h url) . filter ((== m) . routeMethod . fst)
+              h url (r, a) = matchRoute (routePattern r) url >>= Just . a

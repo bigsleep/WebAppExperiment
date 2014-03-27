@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, FlexibleContexts, TemplateHaskell, OverloadedStrings #-}
+{-# LANGUAGE TypeOperators, FlexibleContexts, FlexibleInstances, MultiParamTypeClasses, TemplateHaskell, OverloadedStrings #-}
 module Whone.Routes
 ( Routes(..)
 , RouteDefinition(..)
@@ -21,15 +21,15 @@ import qualified Language.Haskell.TH as TH (Q, Exp(..), mkName)
 import qualified Language.Haskell.TH.Quote as TH (QuasiQuoter(..))
 
 
-data Routes a = Routes [(RouteDefinition, a)]
+data Routes a = Routes [(RouteDefinition, [(B.ByteString, B.ByteString)] -> a)]
 
 instance Functor Routes where
     fmap f (Routes rs) = Routes $ fmap g rs
-        where g (r, a) = (r, f a)
+        where g (r, a) = (r, f . a)
 
-routes :: (Routes :<: f, Monad m) => [(RouteDefinition, App f m a)] -> App f m a
+routes :: (Routes :<: f, Monad m) => [(RouteDefinition, [(B.ByteString, B.ByteString)] -> App f m a)] -> App f m a
 routes rs = App . FreeT . return . Free . inject $ Routes (fmap g rs)
-    where g (r, a) = (r, runApp a)
+    where g (r, a) = (r, runApp . a)
 
 data RouteDefinition = RouteDefinition {
     routeMethod :: HTTP.StdMethod,
@@ -70,7 +70,9 @@ parseEntry :: String -> TH.Q TH.Exp
 parseEntry = f . words
     where f (m : r : a : []) = do
                                xs <- [|RouteDefinition (read m) (parseRoute r)|]
-                               return $ TH.TupE [xs, TH.VarE (TH.mkName a)]
+                               g <- [|Whone.Routes.adapt|]
+                               let app = TH.AppE g (TH.VarE (TH.mkName a))
+                               return $ TH.TupE [xs, app]
           f _ = error "invalid entry pattern"
 
 parseRoute :: String -> [RoutePattern]
@@ -84,3 +86,12 @@ routePatternFromString :: String -> RoutePattern
 routePatternFromString ":" = error "invalid route parameter pattern"
 routePatternFromString (':' : s) = RouteParameter $ B.pack s
 routePatternFromString s = RoutePath $ B.pack s
+
+class Adaptable a b where
+    adapt :: a -> [(B.ByteString, B.ByteString)] -> b
+
+instance Adaptable (App f m a) (App f m a) where
+    adapt = const
+
+instance Adaptable ([(B.ByteString, B.ByteString)] -> App f m a) (App f m a) where
+    adapt = id
