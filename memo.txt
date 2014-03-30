@@ -1,3 +1,21 @@
+---------------------------------------------------------------------
+20140330 直積
+
+ReaderとかStateとかは直積っぽい機能になる
+
+https://ghc.haskell.org/trac/ghc/wiki/PatternSynonyms
+
+:*:も定義して使うか
+
+(JsonApi :+: Error e :+: Logger) :*: Reader r1 :*: Reader r2 :*: State s
+
+injectとf m a -> m aが必要
+
+Stateとか勝手に作るのは無理か
+
+やっぱインターフェースだけ:+:で作ってgetState, putStateとか
+ReaderとかStateはm側に持つほうがいい気がする
+
 ---------------------------------------------------------------
 20140326 url
 
